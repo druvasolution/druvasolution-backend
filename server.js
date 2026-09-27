@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-this-secret';
 const DATA_FILE = path.join(__dirname, 'data', 'customers.json');
-
+fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
 app.use(cors());
 app.use(express.json());
 
