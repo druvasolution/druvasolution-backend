@@ -62,210 +62,68 @@ app.use(cors());
 app.use(express.json());
 
 /* =========================================================
-   LICENSE / DATE HELPERS
-========================================================= */
-
-/*
-   Business timezone:
-   India Standard Time
-
-   Expiry date example:
-   2027-12-31
-
-   License remains valid THROUGH 2027-12-31.
-   It becomes expired from 2028-01-01.
-*/
-
-function getTodayIndiaDate() {
-
-    const parts =
-        new Intl.DateTimeFormat(
-            'en-CA',
-            {
-                timeZone: 'Asia/Kolkata',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            }
-        ).formatToParts(new Date());
-
-    const values = {};
-
-    for (const part of parts) {
-        if (part.type !== 'literal') {
-            values[part.type] = part.value;
-        }
-    }
-
-    return (
-        values.year +
-        '-' +
-        values.month +
-        '-' +
-        values.day
-    );
-}
-
-
-/*
-   Convert expiry value to YYYY-MM-DD.
-
-   PostgreSQL DATE normally already returns:
-   2027-12-31
-
-   This also safely handles:
-   2027-12-31T00:00:00.000Z
-*/
-
-function normalizeDateOnly(value) {
-
-    if (!value) {
-        return null;
-    }
-
-    const text =
-        String(value);
-
-    const match =
-        text.match(
-            /^(\d{4}-\d{2}-\d{2})/
-        );
-
-    if (!match) {
-        return null;
-    }
-
-    return match[1];
-}
-
-
-/*
-   Check whether license is expired.
-
-   Expiry date = today
-   => Still active
-
-   Expiry date < today
-   => Expired
-*/
-
-function isLicenseExpired(expiryDate) {
-
-    const expiry =
-        normalizeDateOnly(expiryDate);
-
-    if (!expiry) {
-        return false;
-    }
-
-    const today =
-        getTodayIndiaDate();
-
-    return expiry < today;
-}
-
-
-/*
-   Get final license status.
-*/
-
-function getLicenseStatus(customer) {
-
-    if (!customer) {
-        return 'Inactive';
-    }
-
-    /*
-       Manual Active OFF has priority.
-    */
-
-    if (customer.active === false) {
-        return 'Inactive';
-    }
-
-    /*
-       Automatic expiry check.
-    */
-
-    if (
-        customer.expiryDate &&
-        isLicenseExpired(
-            customer.expiryDate
-        )
-    ) {
-        return 'Expired';
-    }
-
-    return 'Active';
-}
-
-/* =========================================================
    DATABASE HELPERS
 ========================================================= */
 
-function rowToCustomer(row) {
+function getTodayIndiaDate() {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
+}
 
+function normalizeDateOnly(value) {
+    if (!value) return null;
+    const text = String(value);
+    const match = text.match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : null;
+}
+
+function isLicenseExpired(expiryDate) {
+    const expiry = normalizeDateOnly(expiryDate);
+    if (!expiry) return false;
+    return expiry < getTodayIndiaDate();
+}
+
+function getLicenseStatus(customer) {
+    if (!customer) return 'Inactive';
+    if (customer.active === false) return 'Inactive';
+    if (isLicenseExpired(customer.expiryDate)) return 'Expired';
+    return 'Active';
+}
+
+function rowToCustomer(row) {
     if (!row) {
         return null;
     }
 
     const customer = {
-
         id: row.id,
-
         name: row.name,
-
         email: row.email,
-
         username: row.username,
-
-        passwordHash:
-            row.password_hash,
-
-        active:
-            row.active,
-
-        software:
-            row.software,
-
-        licenseKey:
-            row.license_key,
-
-        expiryDate:
-            row.expiry_date,
-
-        createdAt:
-            row.created_at
-                ? new Date(
-                    row.created_at
-                ).toISOString()
-                : null,
-
-        updatedAt:
-            row.updated_at
-                ? new Date(
-                    row.updated_at
-                ).toISOString()
-                : null
-
+        passwordHash: row.password_hash,
+        active: row.active,
+        software: row.software,
+        licenseKey: row.license_key,
+        expiryDate: row.expiry_date,
+        createdAt: row.created_at
+            ? new Date(row.created_at).toISOString()
+            : null,
+        updatedAt: row.updated_at
+            ? new Date(row.updated_at).toISOString()
+            : null
     };
 
-    /*
-       Add calculated license status.
-    */
-
-    customer.status =
-        getLicenseStatus(customer);
-
-    customer.isExpired =
-        customer.status === 'Expired';
+    customer.status = getLicenseStatus(customer);
+    customer.isExpired = customer.status === 'Expired';
 
     return customer;
 }
 
-
 function publicCustomer(customer) {
-
     if (!customer) {
         return null;
     }
@@ -278,9 +136,7 @@ function publicCustomer(customer) {
     return safe;
 }
 
-
 function generateLicenseKey() {
-
     return 'DS-' +
         crypto
             .randomBytes(5)
@@ -310,13 +166,11 @@ async function initializeDatabase() {
         );
     `);
 
-
     await pool.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS
         customers_email_lower_idx
         ON customers (LOWER(email));
     `);
-
 
     await pool.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS
@@ -324,17 +178,13 @@ async function initializeDatabase() {
         ON customers (LOWER(username));
     `);
 
-
     await pool.query(`
         CREATE UNIQUE INDEX IF NOT EXISTS
         customers_license_key_idx
         ON customers (license_key);
     `);
 
-
-    console.log(
-        'PostgreSQL database initialized.'
-    );
+    console.log('PostgreSQL database initialized.');
 }
 
 /* =========================================================
@@ -377,25 +227,20 @@ function readOldCustomers() {
     }
 }
 
-
 function safeDate(value) {
 
     if (!value) {
         return null;
     }
 
-    const date =
-        new Date(value);
+    const date = new Date(value);
 
-    if (Number.isNaN(
-        date.getTime()
-    )) {
+    if (Number.isNaN(date.getTime())) {
         return null;
     }
 
     return date.toISOString();
 }
-
 
 async function migrateJsonCustomers() {
 
@@ -411,16 +256,11 @@ async function migrateJsonCustomers() {
         return;
     }
 
-
     console.log(
         `Found ${oldCustomers.length} old customer(s). Checking migration...`
     );
 
-
-    for (
-        const customer
-        of oldCustomers
-    ) {
+    for (const customer of oldCustomers) {
 
         try {
 
@@ -434,13 +274,11 @@ async function migrateJsonCustomers() {
 
                 console.log(
                     'Skipping incomplete customer:',
-                    customer.username ||
-                    customer.email
+                    customer.username || customer.email
                 );
 
                 continue;
             }
-
 
             const existing =
                 await pool.query(
@@ -457,7 +295,6 @@ async function migrateJsonCustomers() {
                     ]
                 );
 
-
             if (existing.rows.length) {
 
                 console.log(
@@ -466,7 +303,6 @@ async function migrateJsonCustomers() {
 
                 continue;
             }
-
 
             await pool.query(
                 `
@@ -499,37 +335,21 @@ async function migrateJsonCustomers() {
                 `,
                 [
                     String(customer.id),
-
                     customer.name,
-
                     customer.email,
-
                     customer.username,
-
                     customer.passwordHash,
-
                     customer.active !== false,
-
                     customer.software ||
                         'Courier Billing Software',
-
                     customer.licenseKey ||
                         generateLicenseKey(),
-
-                    customer.expiryDate ||
-                        null,
-
-                    safeDate(
-                        customer.createdAt
-                    ) ||
+                    customer.expiryDate || null,
+                    safeDate(customer.createdAt) ||
                         new Date().toISOString(),
-
-                    safeDate(
-                        customer.updatedAt
-                    )
+                    safeDate(customer.updatedAt)
                 ]
             );
-
 
             console.log(
                 `Migrated customer: ${customer.username}`
@@ -544,257 +364,169 @@ async function migrateJsonCustomers() {
         }
     }
 
-
-    console.log(
-        'JSON migration check completed.'
-    );
+    console.log('JSON migration check completed.');
 }
 
 /* =========================================================
    HEALTH
 ========================================================= */
 
-app.get(
-    '/api/health',
-    async (req, res) => {
+app.get('/api/health', async (req, res) => {
 
-        try {
+    try {
 
-            await pool.query(
-                'SELECT 1'
-            );
+        await pool.query('SELECT 1');
 
-            res.json({
+        res.json({
+            ok: true,
+            service: 'DruvaSolution API',
+            database: 'PostgreSQL'
+        });
 
-                ok: true,
+    } catch (error) {
 
-                service:
-                    'DruvaSolution API',
+        console.error(error);
 
-                database:
-                    'PostgreSQL'
-
-            });
-
-        } catch (error) {
-
-            console.error(error);
-
-            res.status(503).json({
-
-                ok: false,
-
-                service:
-                    'DruvaSolution API',
-
-                database:
-                    'Unavailable'
-
-            });
-        }
+        res.status(503).json({
+            ok: false,
+            service: 'DruvaSolution API',
+            database: 'Unavailable'
+        });
     }
-);
+});
 
 /* =========================================================
    CUSTOMER LOGIN
 ========================================================= */
 
-app.post(
-    '/api/login',
-    async (req, res) => {
+app.post('/api/login', async (req, res) => {
 
-        try {
+    try {
 
-            const {
-                username,
-                password
-            } = req.body;
+        const {
+            username,
+            password
+        } = req.body;
 
+        if (!username || !password) {
 
-            if (
-                !username ||
-                !password
-            ) {
-
-                return res.status(400).json({
-
-                    message:
-                        'Username/email and password are required.'
-
-                });
-            }
-
-
-            const result =
-                await pool.query(
-                    `
-                    SELECT *
-                    FROM customers
-                    WHERE LOWER(email) = LOWER($1)
-                       OR LOWER(username) = LOWER($1)
-                    LIMIT 1
-                    `,
-                    [username]
-                );
-
-
-            if (!result.rows.length) {
-
-                return res.status(401).json({
-
-                    message:
-                        'Invalid username/email or password.'
-
-                });
-            }
-
-
-            const customer =
-                rowToCustomer(
-                    result.rows[0]
-                );
-
-
-            /*
-               Manual inactive check.
-            */
-
-            if (!customer.active) {
-
-                return res.status(403).json({
-
-                    message:
-                        'Your customer account is inactive.'
-
-                });
-            }
-
-
-            /*
-               AUTOMATIC EXPIRY CHECK
-            */
-
-            if (
-                customer.status ===
-                'Expired'
-            ) {
-
-                const expiry =
-                    normalizeDateOnly(
-                        customer.expiryDate
-                    );
-
-                return res.status(403).json({
-
-                    message:
-                        `Your license expired on ${expiry}. Please contact support.`,
-
-                    status:
-                        'Expired',
-
-                    expiryDate:
-                        expiry
-
-                });
-            }
-
-
-            const passwordValid =
-                await bcrypt.compare(
-                    password,
-                    customer.passwordHash
-                );
-
-
-            if (!passwordValid) {
-
-                return res.status(401).json({
-
-                    message:
-                        'Invalid username/email or password.'
-
-                });
-            }
-
-
-            const token =
-                jwt.sign(
-                    {
-                        customerId:
-                            customer.id,
-
-                        role:
-                            'customer'
-                    },
-
-                    JWT_SECRET,
-
-                    {
-                        expiresIn:
-                            '8h'
-                    }
-                );
-
-
-            res.json({
-
-                token,
-
-                customer:
-                    publicCustomer(
-                        customer
-                    )
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                'Customer login error:',
-                error
-            );
-
-            res.status(500).json({
-
+            return res.status(400).json({
                 message:
-                    'Login failed.'
-
+                    'Username/email and password are required.'
             });
         }
+
+        const result =
+            await pool.query(
+                `
+                SELECT *
+                FROM customers
+                WHERE LOWER(email) = LOWER($1)
+                   OR LOWER(username) = LOWER($1)
+                LIMIT 1
+                `,
+                [username]
+            );
+
+        if (!result.rows.length) {
+
+            return res.status(401).json({
+                message:
+                    'Invalid username/email or password.'
+            });
+        }
+
+        const customer =
+            rowToCustomer(result.rows[0]);
+
+        if (!customer.active) {
+
+            return res.status(403).json({
+                message:
+                    'Your customer account is inactive.',
+                status: 'Inactive'
+            });
+        }
+
+        if (isLicenseExpired(customer.expiryDate)) {
+
+            return res.status(403).json({
+                message:
+                    `Your license expired on ${normalizeDateOnly(customer.expiryDate)}. Please contact support.`,
+                status: 'Expired',
+                expiryDate: normalizeDateOnly(customer.expiryDate)
+            });
+        }
+
+        const passwordValid =
+            await bcrypt.compare(
+                password,
+                customer.passwordHash
+            );
+
+        if (!passwordValid) {
+
+            return res.status(401).json({
+                message:
+                    'Invalid username/email or password.'
+            });
+        }
+
+        const token =
+            jwt.sign(
+                {
+                    customerId:
+                        customer.id,
+                    role:
+                        'customer'
+                },
+                JWT_SECRET,
+                {
+                    expiresIn: '8h'
+                }
+            );
+
+        res.json({
+            token,
+            customer:
+                publicCustomer(customer)
+        });
+
+    } catch (error) {
+
+        console.error(
+            'Customer login error:',
+            error
+        );
+
+        res.status(500).json({
+            message:
+                'Login failed.'
+        });
     }
-);
+});
 
 /* =========================================================
    CUSTOMER AUTH
 ========================================================= */
 
-function auth(
-    req,
-    res,
-    next
-) {
+function auth(req, res, next) {
 
     const header =
-        req.headers.authorization ||
-        '';
-
+        req.headers.authorization || '';
 
     const token =
         header.startsWith('Bearer ')
             ? header.slice(7)
             : '';
 
-
     if (!token) {
 
         return res.status(401).json({
-
             message:
                 'Login required.'
-
         });
     }
-
 
     try {
 
@@ -809,10 +541,8 @@ function auth(
     } catch {
 
         res.status(401).json({
-
             message:
                 'Session expired. Please login again.'
-
         });
     }
 }
@@ -821,244 +551,158 @@ function auth(
    CUSTOMER PROFILE
 ========================================================= */
 
-app.get(
-    '/api/me',
-    auth,
-    async (req, res) => {
+app.get('/api/me', auth, async (req, res) => {
 
-        try {
+    try {
 
-            const result =
-                await pool.query(
-                    `
-                    SELECT *
-                    FROM customers
-                    WHERE id = $1
-                    LIMIT 1
-                    `,
-                    [
-                        req.user.customerId
-                    ]
-                );
+        const result =
+            await pool.query(
+                `
+                SELECT *
+                FROM customers
+                WHERE id = $1
+                LIMIT 1
+                `,
+                [req.user.customerId]
+            );
 
+        if (!result.rows.length) {
 
-            if (!result.rows.length) {
-
-                return res.status(404).json({
-
-                    message:
-                        'Customer not found.'
-
-                });
-            }
-
-
-            const customer =
-                rowToCustomer(
-                    result.rows[0]
-                );
-
-
-            /*
-               Manual inactive check.
-            */
-
-            if (!customer.active) {
-
-                return res.status(403).json({
-
-                    message:
-                        'Customer account is inactive.',
-
-                    status:
-                        'Inactive'
-
-                });
-            }
-
-
-            /*
-               AUTOMATIC EXPIRY CHECK
-
-               This prevents an already logged-in
-               customer from continuing to use
-               the dashboard after expiry.
-            */
-
-            if (
-                customer.status ===
-                'Expired'
-            ) {
-
-                const expiry =
-                    normalizeDateOnly(
-                        customer.expiryDate
-                    );
-
-                return res.status(403).json({
-
-                    message:
-                        `Your license expired on ${expiry}. Please contact support.`,
-
-                    status:
-                        'Expired',
-
-                    expiryDate:
-                        expiry
-
-                });
-            }
-
-
-            res.json({
-
-                customer:
-                    publicCustomer(
-                        customer
-                    )
-
-            });
-
-        } catch (error) {
-
-            console.error(error);
-
-            res.status(500).json({
-
+            return res.status(404).json({
                 message:
-                    'Unable to load customer profile.'
-
+                    'Customer not found.'
             });
         }
+
+        const customer =
+            rowToCustomer(result.rows[0]);
+
+        if (!customer.active) {
+
+            return res.status(403).json({
+                message:
+                    'Customer account is inactive.',
+                status: 'Inactive'
+            });
+        }
+
+        if (isLicenseExpired(customer.expiryDate)) {
+
+            return res.status(403).json({
+                message:
+                    `Your license expired on ${normalizeDateOnly(customer.expiryDate)}. Please contact support.`,
+                status: 'Expired',
+                expiryDate: normalizeDateOnly(customer.expiryDate)
+            });
+        }
+
+        res.json({
+            customer:
+                publicCustomer(customer)
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            message:
+                'Unable to load customer profile.'
+        });
     }
-);
+});
 
 /* =========================================================
    ADMIN LOGIN
 ========================================================= */
 
-app.post(
-    '/api/admin/login',
-    (req, res) => {
+app.post('/api/admin/login', (req, res) => {
 
-        try {
+    try {
 
-            const {
-                username,
-                password
-            } = req.body;
+        const {
+            username,
+            password
+        } = req.body;
 
+        if (
+            !ADMIN_USERNAME ||
+            !ADMIN_PASSWORD
+        ) {
 
-            if (
-                !ADMIN_USERNAME ||
-                !ADMIN_PASSWORD
-            ) {
-
-                return res.status(503).json({
-
-                    message:
-                        'Admin credentials are not configured on the server.'
-
-                });
-            }
-
-
-            if (
-                username !==
-                ADMIN_USERNAME ||
-                password !==
-                ADMIN_PASSWORD
-            ) {
-
-                return res.status(401).json({
-
-                    message:
-                        'Invalid admin username or password.'
-
-                });
-            }
-
-
-            const token =
-                jwt.sign(
-                    {
-                        role:
-                            'admin',
-
-                        username:
-                            ADMIN_USERNAME
-                    },
-
-                    JWT_SECRET,
-
-                    {
-                        expiresIn:
-                            '8h'
-                    }
-                );
-
-
-            res.json({
-
-                token,
-
-                admin: {
-
-                    username:
-                        ADMIN_USERNAME,
-
-                    role:
-                        'admin'
-
-                }
-
-            });
-
-        } catch (error) {
-
-            console.error(error);
-
-            res.status(500).json({
-
+            return res.status(503).json({
                 message:
-                    'Admin login failed.'
-
+                    'Admin credentials are not configured on the server.'
             });
         }
+
+        if (
+            username !== ADMIN_USERNAME ||
+            password !== ADMIN_PASSWORD
+        ) {
+
+            return res.status(401).json({
+                message:
+                    'Invalid admin username or password.'
+            });
+        }
+
+        const token =
+            jwt.sign(
+                {
+                    role:
+                        'admin',
+                    username:
+                        ADMIN_USERNAME
+                },
+                JWT_SECRET,
+                {
+                    expiresIn: '8h'
+                }
+            );
+
+        res.json({
+            token,
+            admin: {
+                username:
+                    ADMIN_USERNAME,
+                role:
+                    'admin'
+            }
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        res.status(500).json({
+            message:
+                'Admin login failed.'
+        });
     }
-);
+});
 
 /* =========================================================
    ADMIN AUTH
 ========================================================= */
 
-function adminAuth(
-    req,
-    res,
-    next
-) {
+function adminAuth(req, res, next) {
 
     const header =
-        req.headers.authorization ||
-        '';
-
+        req.headers.authorization || '';
 
     const token =
         header.startsWith('Bearer ')
             ? header.slice(7)
             : '';
 
-
     if (!token) {
 
         return res.status(401).json({
-
             message:
                 'Admin login required.'
-
         });
     }
-
 
     try {
 
@@ -1068,34 +712,27 @@ function adminAuth(
                 JWT_SECRET
             );
 
-
         if (
             decoded.role !==
             'admin'
         ) {
 
             return res.status(403).json({
-
                 message:
                     'Admin access required.'
-
             });
         }
 
-
         req.admin =
             decoded;
-
 
         next();
 
     } catch {
 
         return res.status(401).json({
-
             message:
                 'Admin session expired.'
-
         });
     }
 }
@@ -1120,22 +757,15 @@ app.get(
                     `
                 );
 
-
             const customers =
-                result.rows.map(
-                    row =>
-                        publicCustomer(
-                            rowToCustomer(
-                                row
-                            )
-                        )
+                result.rows.map(row =>
+                    publicCustomer(
+                        rowToCustomer(row)
+                    )
                 );
 
-
             res.json({
-
                 customers
-
             });
 
         } catch (error) {
@@ -1143,10 +773,8 @@ app.get(
             console.error(error);
 
             res.status(500).json({
-
                 message:
                     'Unable to load customers.'
-
             });
         }
     }
@@ -1171,36 +799,25 @@ app.get(
                     WHERE id = $1
                     LIMIT 1
                     `,
-                    [
-                        req.params.id
-                    ]
+                    [req.params.id]
                 );
-
 
             if (!result.rows.length) {
 
                 return res.status(404).json({
-
                     message:
                         'Customer not found.'
-
                 });
             }
-
 
             const customer =
                 rowToCustomer(
                     result.rows[0]
                 );
 
-
             res.json({
-
                 customer:
-                    publicCustomer(
-                        customer
-                    )
-
+                    publicCustomer(customer)
             });
 
         } catch (error) {
@@ -1208,10 +825,8 @@ app.get(
             console.error(error);
 
             res.status(500).json({
-
                 message:
                     'Unable to load customer.'
-
             });
         }
     }
@@ -1239,7 +854,6 @@ app.post(
                 active
             } = req.body;
 
-
             if (
                 !name ||
                 !email ||
@@ -1248,26 +862,18 @@ app.post(
             ) {
 
                 return res.status(400).json({
-
                     message:
                         'Name, email, username and password are required.'
-
                 });
             }
 
-
-            if (
-                password.length < 6
-            ) {
+            if (password.length < 6) {
 
                 return res.status(400).json({
-
                     message:
                         'Password must be at least 6 characters.'
-
                 });
             }
-
 
             const existing =
                 await pool.query(
@@ -1284,21 +890,16 @@ app.post(
                     ]
                 );
 
-
             if (existing.rows.length) {
 
                 return res.status(409).json({
-
                     message:
                         'Email or username already exists.'
-
                 });
             }
 
-
             const id =
                 Date.now().toString();
-
 
             const passwordHash =
                 await bcrypt.hash(
@@ -1306,25 +907,20 @@ app.post(
                     12
                 );
 
-
             const finalLicenseKey =
                 licenseKey ||
                 generateLicenseKey();
-
 
             const finalSoftware =
                 software ||
                 'Courier Billing Software';
 
-
             const finalExpiryDate =
                 expiryDate ||
                 '2027-12-31';
 
-
             const finalActive =
                 active !== false;
-
 
             const result =
                 await pool.query(
@@ -1368,23 +964,16 @@ app.post(
                     ]
                 );
 
-
             const customer =
                 rowToCustomer(
                     result.rows[0]
                 );
 
-
             res.status(201).json({
-
                 message:
                     'Customer created successfully.',
-
                 customer:
-                    publicCustomer(
-                        customer
-                    )
-
+                    publicCustomer(customer)
             });
 
         } catch (error) {
@@ -1394,26 +983,20 @@ app.post(
                 error
             );
 
-
             if (
                 error.code ===
                 '23505'
             ) {
 
                 return res.status(409).json({
-
                     message:
                         'Email, username or license key already exists.'
-
                 });
             }
 
-
             res.status(500).json({
-
                 message:
                     'Unable to create customer.'
-
             });
         }
     }
@@ -1441,7 +1024,6 @@ app.put(
                 active
             } = req.body;
 
-
             const existingResult =
                 await pool.query(
                     `
@@ -1450,32 +1032,21 @@ app.put(
                     WHERE id = $1
                     LIMIT 1
                     `,
-                    [
-                        req.params.id
-                    ]
+                    [req.params.id]
                 );
 
-
-            if (
-                !existingResult.rows.length
-            ) {
+            if (!existingResult.rows.length) {
 
                 return res.status(404).json({
-
                     message:
                         'Customer not found.'
-
                 });
             }
-
 
             const existing =
                 rowToCustomer(
                     existingResult.rows[0]
                 );
-
-
-            /* EMAIL CHECK */
 
             if (email) {
 
@@ -1494,22 +1065,14 @@ app.put(
                         ]
                     );
 
-
-                if (
-                    emailCheck.rows.length
-                ) {
+                if (emailCheck.rows.length) {
 
                     return res.status(409).json({
-
                         message:
                             'Email already exists.'
-
                     });
                 }
             }
-
-
-            /* USERNAME CHECK */
 
             if (username) {
 
@@ -1528,22 +1091,14 @@ app.put(
                         ]
                     );
 
-
-                if (
-                    usernameCheck.rows.length
-                ) {
+                if (usernameCheck.rows.length) {
 
                     return res.status(409).json({
-
                         message:
                             'Username already exists.'
-
                     });
                 }
             }
-
-
-            /* LICENSE KEY CHECK */
 
             if (licenseKey) {
 
@@ -1562,41 +1117,27 @@ app.put(
                         ]
                     );
 
-
-                if (
-                    licenseCheck.rows.length
-                ) {
+                if (licenseCheck.rows.length) {
 
                     return res.status(409).json({
-
                         message:
                             'License key already exists.'
-
                     });
                 }
             }
 
-
-            /* PASSWORD */
-
             let passwordHash =
                 existing.passwordHash;
 
-
             if (password) {
 
-                if (
-                    password.length < 6
-                ) {
+                if (password.length < 6) {
 
                     return res.status(400).json({
-
                         message:
                             'Password must be at least 6 characters.'
-
                     });
                 }
-
 
                 passwordHash =
                     await bcrypt.hash(
@@ -1605,52 +1146,40 @@ app.put(
                     );
             }
 
-
-            /* UPDATED VALUES */
-
             const updatedName =
                 name !== undefined
                     ? name
                     : existing.name;
-
 
             const updatedEmail =
                 email !== undefined
                     ? email
                     : existing.email;
 
-
             const updatedUsername =
                 username !== undefined
                     ? username
                     : existing.username;
-
 
             const updatedSoftware =
                 software !== undefined
                     ? software
                     : existing.software;
 
-
             const updatedLicenseKey =
                 licenseKey !== undefined
                     ? licenseKey
                     : existing.licenseKey;
-
 
             const updatedExpiryDate =
                 expiryDate !== undefined
                     ? expiryDate
                     : existing.expiryDate;
 
-
             const updatedActive =
                 active !== undefined
                     ? active
                     : existing.active;
-
-
-            /* UPDATE DATABASE */
 
             const result =
                 await pool.query(
@@ -1682,23 +1211,16 @@ app.put(
                     ]
                 );
 
-
             const customer =
                 rowToCustomer(
                     result.rows[0]
                 );
 
-
             res.json({
-
                 message:
                     'Customer updated successfully.',
-
                 customer:
-                    publicCustomer(
-                        customer
-                    )
-
+                    publicCustomer(customer)
             });
 
         } catch (error) {
@@ -1708,26 +1230,20 @@ app.put(
                 error
             );
 
-
             if (
                 error.code ===
                 '23505'
             ) {
 
                 return res.status(409).json({
-
                     message:
                         'Email, username or license key already exists.'
-
                 });
             }
 
-
             res.status(500).json({
-
                 message:
                     'Unable to update customer.'
-
             });
         }
     }
@@ -1751,28 +1267,20 @@ app.delete(
                     WHERE id = $1
                     RETURNING id
                     `,
-                    [
-                        req.params.id
-                    ]
+                    [req.params.id]
                 );
-
 
             if (!result.rows.length) {
 
                 return res.status(404).json({
-
                     message:
                         'Customer not found.'
-
                 });
             }
 
-
             res.json({
-
                 message:
                     'Customer deleted successfully.'
-
             });
 
         } catch (error) {
@@ -1780,10 +1288,8 @@ app.delete(
             console.error(error);
 
             res.status(500).json({
-
                 message:
                     'Unable to delete customer.'
-
             });
         }
     }
@@ -1799,14 +1305,11 @@ async function startServer() {
 
         await initializeDatabase();
 
-
         /*
          * If the old customers.json still exists,
          * migrate its customers into PostgreSQL.
          */
-
         await migrateJsonCustomers();
-
 
         app.listen(
             PORT,
@@ -1827,7 +1330,6 @@ async function startServer() {
                 console.log(
                     'Business timezone: Asia/Kolkata'
                 );
-
             }
         );
 
@@ -1841,6 +1343,5 @@ async function startServer() {
         process.exit(1);
     }
 }
-
 
 startServer();
