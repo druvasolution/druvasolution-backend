@@ -82,9 +82,25 @@ function getTodayIndiaDate() {
 
 function normalizeDateOnly(value) {
     if (!value) return null;
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10);
+    }
+
     const text = String(value);
+
     const match = text.match(/\d{4}-\d{2}-\d{2}/);
-    return match ? match[0] : null;
+    if (match) {
+        return match[0];
+    }
+
+    const parsed = new Date(text);
+
+    if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().slice(0, 10);
+    }
+
+    return null;
 }
 
 function isLicenseExpired(expiryDate) {
