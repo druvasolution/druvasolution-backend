@@ -66,12 +66,18 @@ app.use(express.json());
 ========================================================= */
 
 function getTodayIndiaDate() {
-    return new Intl.DateTimeFormat('en-CA', {
+    const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Kolkata',
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'
-    }).format(new Date());
+    }).formatToParts(new Date());
+
+    const year = parts.find(p => p.type === 'year').value;
+    const month = parts.find(p => p.type === 'month').value;
+    const day = parts.find(p => p.type === 'day').value;
+
+    return `${year}-${month}-${day}`;
 }
 
 function normalizeDateOnly(value) {
